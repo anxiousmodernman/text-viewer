@@ -3,78 +3,110 @@ extern crate termion;
 extern crate ropey;
 
 use termion::clear;
-use termion::event::Key;
-use termion::input::TermRead;
+use termion::cursor;
+use termion::event;
+use termion::event::{Key, Event, MouseEvent};
+use termion::input::{TermRead, Events};
 use termion::raw::IntoRawMode;
 use termion::screen::*;
 use termion::terminal_size;
+use termion::style;
 use std::io;
 use std::io::{Write, Read, Stdout, Stdin, Stderr, stdout, stdin, stderr, BufReader};
 use std::fs::File;
 use std::fmt::Debug;
 use ropey::Rope;
 
-//fn write_alt_screen_msg<W: Write>(screen: &mut W) {
-//    write!(screen, "{}{}Welcome to the alternate screen.{}Press '1' to switch to the main screen or '2' to switch to the alternate screen.{}Press 'q' to exit (and switch back to the main screen).",
-//           termion::clear::All,
-//           termion::cursor::Goto(1, 1),
-//           termion::cursor::Goto(1, 3),
-//           termion::cursor::Goto(1, 4)).unwrap();
-//}
-
 struct Pager<R, W: Write>{
     buf: Rope,
     stdout: W,
-    stdin: R,
+    stdin: Events<R>,
+    // the current logical line at the top of the buffer???
     top_pos: u32,
     gutter_width: u32,
-}
-
-struct LogicalLine{
-    line_no: u32,
+    // height and width
+    h: u16,
+    w: u16,
 }
 
 fn init<W: Write, R: Read, RD: Read>(mut stdout: W, stdin: R, w: u16, h: u16, data: RD) {
     // clear the screen
     write!(stdout, "{}", clear::All).unwrap();
+
+    let mut text = Rope::from_reader(data).unwrap();
+
+    let mut pgr = Pager{
+        buf: text,
+        stdout: stdout,
+        stdin: stdin.events(),
+        top_pos: 0,
+        gutter_width: 4,  // hardcoded
+        w: w,
+        h: h,
+    };
+    pgr.render_all();
 }
 
-//impl Pager<R>{
-//    pub fn from_reader<R>(r: R) -> io::Result<Pager<R>> where R: Read {
-//        let pgr = Pager{
-//            buf: Rope::from_reader(r)?,
-//            stdout: stdout(),
-//            stderr: stderr(),
-//            stdin: stdin().keys(),
-//            top_pos: 1,
-//            gutter_width: 4,
-//        };
-//        Ok(pgr)
-//    }
-//
-//    //pub fn event_loop(&mut self) -> io::Result<()> {
-//
-//    //    loop {
-//    //        // wait for keys; get one byte, a Char, probably.
-//    //        let c = self.stdin.next().unwrap().unwrap();
-//    //        match c {
-//    //            Key::Char('q') | Key::Ctrl('c') => {
-//    //                return Ok(());    
-//    //            },
-//    //            _ => {}
-//    //        }
-//    //          self.stdout.flush().unwrap();
-//    //    }
-//
-//    //    Ok(())
-//    //}
-//}
+//impl<R: Read + TermRead + Iterator<Item=Result<Event, std::io::Error>>, W: Write> Pager<R, W> {
+impl<R: Read, W: Write> Pager<R, W> {
+    fn render_all(&mut self) {
+        // max text per line, minus the side gutter
+        let line_chars = self.w as u32 - self.gutter_width;
+        let char_idx_start = self.buf.line_to_char(self.top_pos as usize);
+        let mut pos = self.top_pos.clone();
 
+        let mut editor_line: u16 = 0;
+
+        for line in self.buf.lines() {
+            let line_no = pos as usize + editor_line as usize + 1;
+            //self.write_gutter(editor_line, pos as usize + editor_line as usize + 1);
+            write!(self.stdout, "{}{}", cursor::Goto(1, editor_line+1), line_no).unwrap();
+            editor_line += 1;
+            if editor_line > 10 {
+                break;
+            }
+        }
+
+        self.stdout.flush().unwrap();
+
+        loop {
+            let ev = self.stdin.next().unwrap().unwrap();
+            match ev {
+                Event::Key(Key::Char('q')) => {
+                    write!(self.stdout, "{}{}{}goodbye", clear::All, style::Reset, cursor::Goto(1, 1)).unwrap();
+                    self.stdout.flush().unwrap();
+                    break;
+                }
+                Event::Mouse(me) => {
+                    match me {
+                        MouseEvent::Press(_, x, y) => {
+                            write!(self.stdout, "{}x", termion::cursor::Goto(x, y)).unwrap();
+                            self.stdout.flush().unwrap();
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {
+                    //write!(self.stdout, "{}{}{}", clear::All, style::Reset, cursor::Goto(1, 1)).unwrap();
+                    //self.stdout.flush().unwrap();
+                    //break;
+                }
+
+            }
+        }
+    }
+
+    fn write_gutter(&mut self, go_to_line: u16, line_no: usize) {
+
+
+    }
+}
 
 fn main() {
     let mut r = BufReader::new(File::open("examples/text.txt").unwrap());
 
-    let mut stdout = stdout();
+    // had to move this AlternateScreen instantiation from inside render_all
+    let mut stdout = AlternateScreen::from(stdout().into_raw_mode().unwrap());
     let stdin = stdin();
     let (w, h) = terminal_size().unwrap();
 
