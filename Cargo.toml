@@ -1,0 +1,8 @@
+[package]
+name = "chat-program"
+version = "0.1.0"
+authors = ["Coleman McFarland <coleman.mcfarland@gmail.com>"]
+
+[dependencies]
+ropey = "*"
+termion = "*"
