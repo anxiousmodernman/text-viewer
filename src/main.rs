@@ -15,6 +15,7 @@ use std::io;
 use std::io::{Write, Read, Stdout, Stdin, Stderr, stdout, stdin, stderr, BufReader};
 use std::fs::File;
 use std::fmt::Debug;
+use std::ops::Range;
 use ropey::Rope;
 
 struct Pager<R, W: Write>{
@@ -79,11 +80,12 @@ impl<R: Read, W: Write> Pager<R, W> {
     /// require 3, return 3, etc.
     fn write_text_line(&mut self, start_at: (u16, u16), line_no: u32, line: ropey::RopeSlice) -> usize {
 
-        let takes_up = line.len_chars() / self.w as usize;
+        let takes_up = line.len_chars() / self.text_area_line_width();
 
         write!(self.stdout, " {}{}", cursor::Goto(start_at.0, start_at.1), line_no).unwrap();
         takes_up
     }
+
 
     fn render_all(&mut self) {
         // max text per line, minus the side gutter
@@ -94,13 +96,24 @@ impl<R: Read, W: Write> Pager<R, W> {
 
         for line in self.buf.lines() {
             let line_no = pos as usize + editor_line as usize + 1;
-            //self.write_gutter(editor_line, pos as usize + editor_line as usize + 1);
-            write!(self.stdout, " {}{}", cursor::Goto(1, editor_line+1), line_no).unwrap();
+            let takes_up = line_occupies(line.len_chars(), self.text_area_line_width());
+            if (editor_line as usize + takes_up) > self.h as usize {
+                // We will overflow our editor. Stop printing after this line.
+
+            }
             editor_line += 1;
             if editor_line >= self.h {
                 break;
             }
-            write!(self.stdout, " {}{}", cursor::Goto(self.gutter_width as u16 + 1, editor_line+1), line).unwrap();
+            if line.len_chars() >= self.text_area_line_width() {
+                // write the first gutter with a line number
+                write_gutter(&mut self.stdout, line_no, pos as u16 + editor_line as u16 + 1, false);
+            } else {
+                // text fits on one line, write a gutter with a line number
+                write_gutter(&mut self.stdout, line_no, pos as u16 + editor_line as u16 + 1, false);
+                write!(self.stdout, " {}{}", cursor::Goto(self.gutter_width as u16 + 1, editor_line+1), line).unwrap();
+            }
+            
         }
 
         self.stdout.flush().unwrap();
@@ -129,6 +142,69 @@ impl<R: Read, W: Write> Pager<R, W> {
     }
 }
 
+fn write_gutter<W: Write>(w: &mut W, line_no: usize, editor_line: u16, flush_buffer: bool) {
+        if line_no == 0 {
+            // pass 0 for a blank gutter when overflowing lines.
+            write!(w, " {} ", cursor::Goto(1, editor_line+1)).unwrap();
+        } else {
+            write!(w, " {}{}", cursor::Goto(1, editor_line+1), line_no).unwrap();
+        }
+        if flush_buffer {
+            w.flush().unwrap();
+        };
+}
+
+/// Compute how many lines of the editor we require to display a line of text.
+/// If greater than 1, that means we'll need to slice our line into N segments
+/// for wrapping. We always return at least 1.
+fn line_occupies(line_len: usize, editor_width: usize) -> usize {
+    if line_len <= editor_width {
+        1
+    } else {
+        let mut n = line_len / editor_width;
+        if (line_len % editor_width) != 0 {
+            n += 1;
+        }
+        n
+    }
+}
+
+fn get_ranges(line_len: usize, editor_width: usize) -> Vec<Range<usize>> {
+    let mut ranges = Vec::with_capacity(line_occupies(line_len, editor_width));
+    if line_len <= editor_width {
+        return vec![(0..line_len)];
+    } else {
+        let mut n = line_len / editor_width;
+        if (line_len % editor_width) != 0 {
+            n += 1;
+            for i in (0..n) {
+                if i == (n - 1) {
+                    let start = i * editor_width; 
+                    let end = (i * editor_width) + (line_len % editor_width);
+                    let r = (start..end);
+                    ranges.push(r);
+                } else {
+                    let start = i * editor_width; 
+                    let end = (i * editor_width) + editor_width;
+                    let r = (start..end);
+                    ranges.push(r);
+                }
+            }
+            return ranges;
+        } else {
+            for i in (0..n) {
+                let start = i * editor_width; 
+                let end = (i * editor_width) + editor_width;
+                let r = (start..end);
+                ranges.push(r);
+            }
+            return ranges;
+        }
+        return ranges;
+    }
+    return ranges;
+}
+
 fn main() {
     let mut r = BufReader::new(File::open("examples/text.txt").unwrap());
 
@@ -141,3 +217,35 @@ fn main() {
 
 }
 
+#[test]
+fn test_get_ranges() {
+    assert_eq!(get_ranges(17, 7), vec![(0..7), (7..14), (14..17)]);
+    assert_eq!(get_ranges(14, 7), vec![(0..7), (7..14)]);
+    assert_eq!(get_ranges(1, 7), vec![(0..1)]);
+    assert_eq!(get_ranges(0, 7), vec![(0..0)]); // is this the behavior we want?
+}
+
+#[test]
+fn test_line_occupies() {
+    let line = 100;
+    let editor = 50;
+    assert_eq!(2, line_occupies(line, editor));
+    assert_eq!(3, line_occupies(101, 50));
+    assert_eq!(1, line_occupies(0, 50));
+    assert_eq!(5, line_occupies(201, 50));
+
+}
+
+#[test]
+fn do_math() {
+    // How does division work in Rust?
+    let answer = 100 as usize / 33 as usize;
+    assert_eq!(answer, 3);
+    let answer = 100 as usize % 33 as usize;
+    assert_eq!(answer, 1);
+    let answer = 16 as usize / 9 as usize;
+    assert_eq!(answer, 1);
+    let answer = 16 as usize % 9 as usize;
+    assert_eq!(answer, 7);
+    // Okay, cool.
+}
