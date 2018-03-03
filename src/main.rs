@@ -16,6 +16,7 @@ use std::io::{Write, Read, Stdout, Stdin, Stderr, stdout, stdin, stderr, BufRead
 use std::fs::File;
 use std::fmt::Debug;
 use std::ops::Range;
+use std::iter::Iterator;
 use ropey::Rope;
 
 struct Pager<R, W: Write>{
@@ -101,17 +102,33 @@ impl<R: Read, W: Write> Pager<R, W> {
                 // We will overflow our editor. Stop printing after this line.
 
             }
-            editor_line += 1;
-            if editor_line >= self.h {
-                break;
-            }
             if line.len_chars() >= self.text_area_line_width() {
-                // write the first gutter with a line number
-                write_gutter(&mut self.stdout, line_no, pos as u16 + editor_line as u16 + 1, false);
+                let mut ranges = get_ranges(line.len_chars(), self.text_area_line_width());
+                for i in 0..ranges.len() {
+                    editor_line += 1;
+                    if editor_line >= self.h {
+                        break;
+                    }
+                    // write the first gutter with a line number
+                    if i == 0 {
+                        write_gutter(&mut self.stdout, line_no, pos as u16 + editor_line as u16 + 1, false);
+                    } else {
+                        // passing 0 omits line number from gutter
+                        write_gutter(&mut self.stdout, 0, pos as u16 + editor_line as u16 + 1, false);
+                    }
+                    // we're splitting over multiple editor lines, so we slice
+                    let slc = line.slice(ranges[i].clone());
+                    write!(self.stdout, " {}{}", cursor::Goto(self.gutter_width as u16 + 1, editor_line), slc).unwrap();
+    
+                }
             } else {
+                editor_line += 1;
+                if editor_line >= self.h {
+                    break;
+                }
                 // text fits on one line, write a gutter with a line number
                 write_gutter(&mut self.stdout, line_no, pos as u16 + editor_line as u16 + 1, false);
-                write!(self.stdout, " {}{}", cursor::Goto(self.gutter_width as u16 + 1, editor_line+1), line).unwrap();
+                write!(self.stdout, " {}{}", cursor::Goto(self.gutter_width as u16 + 1, editor_line), line).unwrap();
             }
             
         }
