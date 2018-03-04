@@ -5,7 +5,10 @@ use std::ops::Range;
 use ropey::Rope;
 
 type LineNo = usize;
+
 struct Line(LineNo, Vec<Range<usize>>);
+
+#[derive(Clone)]
 struct Dims {
     width: usize, height: usize,
 }
@@ -86,6 +89,20 @@ fn line_occupies(line_len: usize, editor_width: usize) -> usize {
 
 #[test]
 fn test_view_from_rope() {
+    // We repeatedly clone these dimensions.
+    let dims = Dims{ height: 10, width: 10 };
+
+    let r = Rope::from_str("hello\nworld");
+    let v = View::from_rope(&r, dims.clone());
+    assert_eq!(v.lines.len(), 2);
+
+    let r = Rope::from_str("hello\nworld\n");
+    let v = View::from_rope(&r, dims.clone());
+    assert_eq!(v.lines.len(), 3);
+
+    let r = Rope::from_str("hello\nworld\n\n");
+    let v = View::from_rope(&r, dims.clone());
+    assert_eq!(v.lines.len(), 4);
 
 }
 

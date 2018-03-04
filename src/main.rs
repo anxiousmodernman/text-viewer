@@ -177,6 +177,7 @@ fn write_gutter<W: Write>(w: &mut W, line_no: usize, editor_line: u16, flush_buf
         };
 }
 
+// TODO remove
 /// Compute how many lines of the editor we require to display a line of text.
 /// If greater than 1, that means we'll need to slice our line into N segments
 /// for wrapping. We always return at least 1.
@@ -192,6 +193,7 @@ fn line_occupies(line_len: usize, editor_width: usize) -> usize {
     }
 }
 
+// TODO remove
 fn get_ranges(line_len: usize, editor_width: usize) -> Vec<Range<usize>> {
     let mut ranges = Vec::with_capacity(line_occupies(line_len, editor_width));
     if line_len <= editor_width {
