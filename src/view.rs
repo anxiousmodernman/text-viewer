@@ -42,13 +42,12 @@ fn get_ranges(line_len: usize, width: usize) -> Vec<Range<usize>> {
         if (line_len % width) != 0 {
             n += 1;
             for i in (0..n) {
+                let start = i * width; 
                 if i == (n - 1) {
-                    let start = i * width; 
                     let end = (i * width) + (line_len % width);
                     let r = (start..end);
                     ranges.push(r);
                 } else {
-                    let start = i * width; 
                     let end = (i * width) + width;
                     let r = (start..end);
                     ranges.push(r);
@@ -88,4 +87,22 @@ fn line_occupies(line_len: usize, editor_width: usize) -> usize {
 #[test]
 fn test_view_from_rope() {
 
+}
+
+#[test]
+fn test_get_ranges() {
+    assert_eq!(get_ranges(17, 7), vec![(0..7), (7..14), (14..17)]);
+    assert_eq!(get_ranges(14, 7), vec![(0..7), (7..14)]);
+    assert_eq!(get_ranges(1, 7), vec![(0..1)]);
+    assert_eq!(get_ranges(0, 7), vec![(0..0)]); // is this the behavior we want?
+}
+
+#[test]
+fn test_line_occupies() {
+    let line = 100;
+    let editor = 50;
+    assert_eq!(2, line_occupies(line, editor));
+    assert_eq!(3, line_occupies(101, 50));
+    assert_eq!(1, line_occupies(0, 50));
+    assert_eq!(5, line_occupies(201, 50));
 }

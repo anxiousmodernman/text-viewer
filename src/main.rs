@@ -241,14 +241,6 @@ fn main() {
 }
 
 #[test]
-fn test_get_ranges() {
-    assert_eq!(get_ranges(17, 7), vec![(0..7), (7..14), (14..17)]);
-    assert_eq!(get_ranges(14, 7), vec![(0..7), (7..14)]);
-    assert_eq!(get_ranges(1, 7), vec![(0..1)]);
-    assert_eq!(get_ranges(0, 7), vec![(0..0)]); // is this the behavior we want?
-}
-
-#[test]
 fn test_line_occupies() {
     let line = 100;
     let editor = 50;
