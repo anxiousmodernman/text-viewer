@@ -19,6 +19,8 @@ use std::ops::Range;
 use std::iter::Iterator;
 use ropey::Rope;
 
+mod view;
+
 struct Pager<R, W: Write>{
     buf: Rope,
     stdout: W,
@@ -87,10 +89,13 @@ impl<R: Read, W: Write> Pager<R, W> {
         takes_up
     }
 
+    fn render_all2(&mut self) {
+
+    }
+
 
     fn render_all(&mut self) {
         // max text per line, minus the side gutter
-        let char_idx_start = self.buf.line_to_char(self.top_pos as usize);
         let mut pos = self.top_pos.clone();
 
         let mut editor_line: u16 = 0;
@@ -105,12 +110,13 @@ impl<R: Read, W: Write> Pager<R, W> {
             if line.len_chars() >= self.text_area_line_width() {
                 let mut ranges = get_ranges(line.len_chars(), self.text_area_line_width());
                 for i in 0..ranges.len() {
-                    editor_line += 1;
-                    if editor_line >= self.h {
-                        break;
-                    }
+                    // increment first to start on line 1, not 0
                     // write the first gutter with a line number
                     if i == 0 {
+                        editor_line += 1;
+                        if editor_line >= self.h {
+                            break;
+                        }
                         write_gutter(&mut self.stdout, line_no, pos as u16 + editor_line as u16 + 1, false);
                     } else {
                         // passing 0 omits line number from gutter
@@ -118,7 +124,7 @@ impl<R: Read, W: Write> Pager<R, W> {
                     }
                     // we're splitting over multiple editor lines, so we slice
                     let slc = line.slice(ranges[i].clone());
-                    write!(self.stdout, " {}{}", cursor::Goto(self.gutter_width as u16 + 1, editor_line), slc).unwrap();
+                    write!(self.stdout, " {}{}", cursor::Goto(self.gutter_width as u16 + 1, editor_line +1), slc).unwrap();
     
                 }
             } else {
@@ -162,9 +168,9 @@ impl<R: Read, W: Write> Pager<R, W> {
 fn write_gutter<W: Write>(w: &mut W, line_no: usize, editor_line: u16, flush_buffer: bool) {
         if line_no == 0 {
             // pass 0 for a blank gutter when overflowing lines.
-            write!(w, " {} ", cursor::Goto(1, editor_line+1)).unwrap();
+            write!(w, " {} ", cursor::Goto(1, editor_line)).unwrap();
         } else {
-            write!(w, " {}{}", cursor::Goto(1, editor_line+1), line_no).unwrap();
+            write!(w, " {}{}", cursor::Goto(1, editor_line), line_no).unwrap();
         }
         if flush_buffer {
             w.flush().unwrap();
